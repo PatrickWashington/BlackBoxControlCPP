@@ -95,3 +95,11 @@ Eigen::MatrixXd NetworkSystem::testcontrol(Eigen::MatrixXd start, Eigen::MatrixX
     result.block(state.rows(),0,control.rows(),control.cols()) = control;
     return result;
 }
+
+// Eigen::MatrixXd NetworkSystem::invdynamics(Eigen::MatrixXd state, Eigen::Matrix control)
+// {
+//     Eigen::MatrixXd z;
+    
+//     z = state - net.outbiases;
+//     z = (net.outweights.transpose()*net.outweights).inverse()*(net.outweights.transpose()) * z;
+// }

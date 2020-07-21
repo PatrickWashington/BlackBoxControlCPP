@@ -38,7 +38,8 @@ NeuralNetwork::NeuralNetwork(std::string filename)
                     numhidden = stoi(substr);
                     getline(ss, substr, ',');
                     if(substr[0] == 's') { std::cout << "set sigmoid\n"; activation = 0; }
-                    else if(substr[0] == 't') {std::cout << "set tanh\n"; activation = 3; }
+                    else if(substr[0] == 't') { std::cout << "set tanh\n"; activation = 3; }
+                    else if(substr[0] == 'r') { std::cout << "set relu\n"; activation = 1; }
                     
                     inweights.resize(hiddensize, inputsize);
                     inbiases.resize(hiddensize,1);
@@ -150,6 +151,10 @@ NeuralNetwork::NeuralNetwork(int in, int out, int hidden, int layer, int act)
     hiddenbiases = Eigen::MatrixXd::Zero(hiddensize,numhidden);
     outweights = Eigen::MatrixXd::Random(outputsize,hiddensize);
     outbiases = Eigen::MatrixXd::Zero(outputsize,1);
+
+    inweightsinv = (inweights.transpose() * inweights).inverse() * (inweights.transpose());
+    outweightsinv = (outweights.transpose() * outweights).inverse() * (outweights.transpose());
+    inweightsinv = (inweights.transpose() * inweights).inverse() * (inweights.transpose());
     
     inshift = Eigen::MatrixXd::Zero(inputsize,1);
     inscale = Eigen::MatrixXd::Ones(inputsize, 1);
@@ -450,6 +455,15 @@ Eigen::MatrixXd NeuralNetwork::activationdiff(Eigen::MatrixXd x)
     else { return Eigen::MatrixXd::Ones(x.rows(),x.cols()); }
 }
 
+// Eigen::MatrixXd NeuralNetwork::activationinv(Eigen::MatrixXd y)
+// {
+//     if(activation == 0) {return invSigmoid(x); }
+//     else if(activation == 1){ std::cout << "Cannot invert ReLU\n"; return x }
+//     else if(activation == 2) { return invLeakyReLU(x); }
+//     else if(activation == 3) { return invTanh(x); }
+//     else { return x; }
+// }
+
 Eigen::MatrixXd NeuralNetwork::ReLU(Eigen::MatrixXd x)
 {
     Eigen::MatrixXd out = (x.array().max(0)).matrix();
@@ -493,8 +507,8 @@ Eigen::MatrixXd NeuralNetwork::Sigmoid(Eigen::MatrixXd x)
 
 Eigen::MatrixXd NeuralNetwork::Tanh(Eigen::MatrixXd x)
 {
-    Eigen::MatrixXd out = ((x.array().exp() - (-x).array().exp()) / (x.array().exp() + (-x).array().exp())).matrix();
-
+    // Eigen::MatrixXd out = ((x.array().exp() - (-x).array().exp()) / (x.array().exp() + (-x).array().exp())).matrix();
+    Eigen::MatrixXd out = x.array().tanh().matrix();
     return out;
 }
 
@@ -529,6 +543,18 @@ Eigen::MatrixXd NeuralNetwork::diffTanh(Eigen::MatrixXd x)
     Eigen::MatrixXd t = Tanh(x);
     return (1 - t.array()*t.array()).matrix();
 }
+
+// Eigen::MatrixXd NeuralNetwork::invSigmoid(Eigen::MatrixXd y)
+// {
+//     Eigen::MatrixXd x = (y.array().log() - (y.array()-1).log()).matrix();
+//     return x;
+// }
+
+// Eigen::MatrixXd NeuralNetwork::invTanh(Eigen::MatrixXd y)
+// {
+//     Eigen::MatrixXd x = ((1+y.array()).log()/2.0 - (1-y.array()).log()/2.0).matrix();
+//     return x;
+// }
 
 Eigen::MatrixXd NeuralNetwork::col2diag(Eigen::MatrixXd mat)
 {

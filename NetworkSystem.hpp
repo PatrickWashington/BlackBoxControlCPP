@@ -31,6 +31,8 @@ public:
     Eigen::MatrixXd execute(Eigen::MatrixXd state, Eigen::MatrixXd control) override;
 
     Eigen::MatrixXd testcontrol(Eigen::MatrixXd start, Eigen::MatrixXd control);
+
+    // Eigen::MatrixXd invdynamics(Eigen::MatrixXd state, Eigen::MatrixXd control);
 };
 
 

@@ -16,76 +16,12 @@
 #include "Eigen/Dense"
 #include "System.hpp"
 #include "InvertedPendulum.hpp"
+#include "SlidingBlock.hpp"
 #include "NeuralNetwork.hpp"
 #include "NetworkSystem.hpp"
 #include "ILQR.hpp"
 //#include "../../madplotlib/Madplotlib.h"
 //#include "../../matplotlib-cpp-master/matplotlibcpp.h"
-
-Eigen::MatrixXd generateInputData(System *sys, int numsample)
-{
-    Eigen::MatrixXd inputs = (Eigen::MatrixXd::Random(sys->numstate+sys->numinput, numsample).array()+1).matrix()/2;
-    double width, minval, maxval;
-    
-    for(int ii = 0; ii < sys->ranges.rows(); ii++)
-    {
-        minval = sys->ranges(ii,0);
-        maxval = sys->ranges(ii,1);
-        width = maxval - minval;
-        inputs.row(ii) = ((inputs.row(ii)*width).array() + minval).matrix();
-    }
-    return inputs;
-}
-
-Eigen::MatrixXd generateOutputData(System *sys, Eigen::MatrixXd inputs)
-{
-    long numsample = inputs.cols();
-    Eigen::MatrixXd state = inputs.block(0, 0, sys->numstate, numsample);
-    Eigen::MatrixXd control = inputs.block(sys->numstate, 0, sys->numinput, numsample);
-    Eigen::MatrixXd outputs = sys->dynamics(state, control);
-    return outputs;
-}
-
-Eigen::MatrixXd runILQR(System *sys, Eigen::MatrixXd start, Eigen::MatrixXd goal, bool isnet)
-{
-    int maxiter = 1000;
-    double controlchange = 0;
-    double enderror = 0;
-    double lr = 0.1;
-    int executesteps = 50;
-    int horizonsteps = 500;
-    int totalsteps = 500;
-    double q = 0.01;
-    double qf = 1;
-    double r = 0.00001;
-    
-    Eigen::MatrixXd xu = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, totalsteps+horizonsteps+1);
-    xu.block(0,0,sys->numstate,1) = start;
-    Eigen::MatrixXd plan = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, horizonsteps+1);
-    plan.block(0,0,sys->numstate,1) = start;
-    Eigen::MatrixXd exec = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, executesteps+1);
-    exec.block(0,executesteps,sys->numstate,1) = start;
-    
-    ILQR solver = ILQR(sys, maxiter, controlchange, enderror, lr, executesteps, horizonsteps, totalsteps, q, qf, r, isnet);
-    
-    int startcol = 0;
-    
-    for(int step = 0; step < totalsteps; step += executesteps)
-    {
-        plan = solver.solve(exec.block(0,executesteps,sys->numstate,1), goal, Eigen::MatrixXd::Zero(sys->numinput,horizonsteps));
-        // plan = solver.solve(plan.block(0, 0, sys->numstate, 1), goal, Eigen::MatrixXd::Zero(sys->numinput,horizonsteps));
-        // plan = solver.solve(plan.block(0, 0, sys->numstate, 1), goal, plan.block(sys->numstate, 0, sys->numinput, horizonsteps));
-        
-        exec = solver.execute(plan.block(0,0,sys->numstate,executesteps+1), plan.block(sys->numstate,0,sys->numinput,executesteps), exec.block(0,executesteps,sys->numstate,1));
-        
-        xu.block(0,startcol,exec.rows(),exec.cols()) = exec;
-        startcol += executesteps;
-        plan.block(0,0,plan.rows(),plan.cols()-executesteps) = plan.block(0,executesteps,plan.rows(),plan.cols()-executesteps);
-        plan.block(0,plan.cols()-executesteps,plan.rows(),executesteps) = Eigen::MatrixXd::Zero(plan.rows(), executesteps);
-    }
-    
-    return xu.block(0,0,xu.rows(),totalsteps+1);
-}
 
 void matrixToCSV(Eigen::MatrixXd mat, std::string filename)
 {
@@ -147,6 +83,91 @@ Eigen::MatrixXd csvToMatrix(std::string filename)
     return mat;
 }
 
+Eigen::MatrixXd generateInputData(System *sys, int numsample)
+{
+    Eigen::MatrixXd inputs = (Eigen::MatrixXd::Random(sys->numstate+sys->numinput, numsample).array()+1).matrix()/2;
+    double width, minval, maxval;
+    
+    for(int ii = 0; ii < sys->ranges.rows(); ii++)
+    {
+        minval = sys->ranges(ii,0);
+        maxval = sys->ranges(ii,1);
+        width = maxval - minval;
+        inputs.row(ii) = ((inputs.row(ii)*width).array() + minval).matrix();
+    }
+
+    return inputs;
+}
+
+Eigen::MatrixXd generateOutputData(System *sys, Eigen::MatrixXd inputs)
+{
+    long numsample = inputs.cols();
+    Eigen::MatrixXd state = inputs.block(0, 0, sys->numstate, numsample);
+    Eigen::MatrixXd control = inputs.block(sys->numstate, 0, sys->numinput, numsample);
+    Eigen::MatrixXd outputs = sys->dynamics(state, control);
+    return outputs;
+}
+
+Eigen::MatrixXd runILQR(System *sys, Eigen::MatrixXd start, Eigen::MatrixXd goal, bool isnet)
+{
+    int maxiter = 1000;
+    double controlchange = 0;
+    double enderror = 0;
+    double lr = 0.1;
+    int executesteps = 10;
+    int horizonsteps = 100;
+    int totalsteps = 1000;
+    double q = 0.001;
+    double qf = 1;
+    double r = 0.001;
+    
+    Eigen::MatrixXd xu = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, totalsteps+horizonsteps+1);
+    xu.block(0,0,sys->numstate,1) = start;
+    Eigen::MatrixXd plan = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, horizonsteps+1);
+    plan.block(0,0,sys->numstate,1) = start;
+    Eigen::MatrixXd exec = Eigen::MatrixXd::Zero(sys->numinput+sys->numstate, executesteps+1);
+    exec.block(0,executesteps,sys->numstate,1) = start;
+    
+    ILQR solver = ILQR(sys, maxiter, controlchange, enderror, lr, executesteps, horizonsteps, totalsteps, q, qf, r, isnet);
+    
+    int startcol = 0;
+    
+    for(int step = 0; step < totalsteps; step += executesteps)
+    {
+        plan = solver.solve(exec.block(0,executesteps,sys->numstate,1), goal, Eigen::MatrixXd::Zero(sys->numinput,horizonsteps));
+        // plan = solver.solve(plan.block(0, 0, sys->numstate, 1), goal, Eigen::MatrixXd::Zero(sys->numinput,horizonsteps));
+        // plan = solver.solve(plan.block(0, 0, sys->numstate, 1), goal, plan.block(sys->numstate, 0, sys->numinput, horizonsteps));
+        
+        exec = solver.execute(plan.block(0,0,sys->numstate,executesteps+1), plan.block(sys->numstate,0,sys->numinput,executesteps), exec.block(0,executesteps,sys->numstate,1));
+        
+        xu.block(0,startcol,exec.rows(),exec.cols()) = exec;
+        startcol += executesteps;
+        plan.block(0,0,plan.rows(),plan.cols()-executesteps) = plan.block(0,executesteps,plan.rows(),plan.cols()-executesteps);
+        plan.block(0,plan.cols()-executesteps,plan.rows(),executesteps) = Eigen::MatrixXd::Zero(plan.rows(), executesteps);
+    }
+    
+    return xu.block(0,0,xu.rows(),totalsteps+1);
+}
+
+Eigen::MatrixXd findeq(System *sys, std::string filename)
+{
+    Eigen::MatrixXd inputs = generateInputData(sys,1000);
+    Eigen::MatrixXd result = sys->findequilibria(inputs,1000,0.0000001,1);
+    Eigen::MatrixXd diff = Eigen::MatrixXd::Zero(1,result.cols());
+    Eigen::MatrixXd u = Eigen::MatrixXd::Zero(sys->numinput,1);
+    for(int ii = 0; ii < result.cols(); ii++)
+    {
+        diff(0,ii) = (sys->dynamics(result.col(ii),u) - result.col(ii)).norm();
+    }
+    std::cout << "Mean error of found points is: " << diff.array().mean() << "\n";
+    matrixToCSV(result,filename);
+    return result;
+}
+
+// Eigen::MatrixXd findpath(System *sys, Eigen::MatrixXd start, Eigen::MatrixXd goal)
+// {
+
+// }
 
 int main(int argc, char *argv[])
 {
@@ -170,10 +191,11 @@ int main(int argc, char *argv[])
             std::cout << "generating " << numsample << " i/o pairs for inverted pendulum\n";
             Eigen::MatrixXd x = generateInputData(&invpen,numsample);
             Eigen::MatrixXd y = generateOutputData(&invpen,x);
-            matrixToCSV(x, std::string(argv[4])+"_indata.csv");
-            std::cout << "Saved input data to " << std::string(argv[4])+"_indata.csv\n";
-            matrixToCSV(y, std::string(argv[4])+"_outdata.csv");
-            std::cout << "Saved output data to " << std::string(argv[4])+"_outdata.csv\n";
+            Eigen::MatrixXd data = Eigen::MatrixXd::Zero(x.rows()+y.rows(),x.cols());
+            data.block(0,0,x.rows(),x.cols()) = x;
+            data.block(x.rows(),0,y.rows(),y.cols()) = y;
+            matrixToCSV(data, std::string(argv[4])+"_trainingdata.csv");
+            std::cout << "Saved training data to " << std::string(argv[4])+"_trainingdata.csv\n";
         } 
 
         Eigen::MatrixXd start = Eigen::MatrixXd::Zero(2,1);
@@ -203,118 +225,61 @@ int main(int argc, char *argv[])
                 matrixToCSV(result,"invpen/net_invpen_test_result.csv");
                 std::cout << "Saved test result to invpen/net_invpen_test_result.csv\n";
             }
+            else if(std::string(argv[4]) == "eq")
+            {
+                std::cout << "Finding equilibria\n";
+                Eigen::MatrixXd result = findeq(&netsys,"invpen/invpen_net_eq.csv");
+                // std::cout << result << "\n";
+            }
         }
 
-        if(std::string(argv[2]) == "ilqr")
+        else if(std::string(argv[2]) == "ilqr")
         {
             std::cout << "iLQR\n";
             Eigen::MatrixXd result = runILQR(&invpen, start, goal, false);
             matrixToCSV(result,"invpen/invpen_ilqr_result.csv");
             std::cout << "Saved result to invpen/invpen_ilqr_result.csv\n";
         }
+
+        else if(std::string(argv[2]) == "eq")
+        {
+            std::cout << "Finding equilibria\n";
+            Eigen::MatrixXd result = findeq(&invpen,"invpen/invpen_eq.csv");
+            // std::cout << result << "\n";
+        }
     }
-    
-//    InvertedPendulum invpen = InvertedPendulum(1, 1, 1, 0.001, 0.01);
-//    double pi = 2*acos(0.0);
-//    Eigen::Matrix<double,2,1> start;
-//    start << pi,0;
-//    Eigen::MatrixXd goal = Eigen::MatrixXd::Zero(2, 1);
-//    goal *= 0;
-////    ILQR solver = ILQR(&invpen, 10, 0.01, 0.01, 0.1, 0.001, 0.01, 0.1, 1, 10, 0, 1, 0.0001);
-//
-//    NeuralNetwork net = NeuralNetwork("/Users/patrickwashington/Desktop/pendulumnet_csv.csv");
-//    NetworkSystem netsys = NetworkSystem(net, &invpen);
-//
-////    Eigen::MatrixXd result = runILQR(&netsys, start, goal, true);
-//    Eigen::MatrixXd result = runILQR(&invpen, start, goal, false);
-//    matrixToCSV(result, "/Users/patrickwashington/Desktop/testfile.csv");
-    
-    // std::string one = "testing";
-    // std::string two = "this";
-    // std::cout << one+two << "\n";
 
-    // InvertedPendulum invpen = InvertedPendulum(1,1,1,0.001,0.01);
-    // NetworkSystem netsys;
-    // NeuralNetwork net;
+    if(std::string(argv[1]) == "block")
+    {
+        std::cout << "Sliding Block\n";
+        SlidingBlock sldblk = SlidingBlock();
 
-    // int systemchoice;
-    // int basesystemchoice;
-    // int runchoice;
-    // std::string netfile;
-    // std::string filestart;
+        if(std::string(argv[2]) == "gendata")
+        {
+            int numsample = std::stoi(argv[3]);
+            std::cout << "generating " << numsample << " i/o pairs for sliding block\n";
+            Eigen::MatrixXd x = generateInputData(&sldblk,numsample);
+            Eigen::MatrixXd y = generateOutputData(&sldblk,x);
+            Eigen::MatrixXd data = Eigen::MatrixXd::Zero(x.rows()+y.rows(),x.cols());
+            data.block(0,0,x.rows(),x.cols()) = x;
+            data.block(x.rows(),0,y.rows(),y.cols()) = y;
+            matrixToCSV(data, std::string(argv[4])+"_trainingdata.csv");
+            std::cout << "Saved training data to " << std::string(argv[4])+"_trainingdata.csv\n";
+        }
 
-    // std::cout << "Choose system type to use:\n\t(1) Inverted Pendulum\n\t(2) Network\n";
-    // std::cin >> systemchoice;
+        Eigen::MatrixXd start = Eigen::MatrixXd::Zero(2,1);
+        start(0,0) = 5;
+        Eigen::MatrixXd goal = Eigen::MatrixXd::Zero(2,1);
 
-    // if(systemchoice == 1)
-    // {
-    //     // idk
-    // }
+        if(std::string(argv[2]) == "ilqr")
+        {
+            std::cout << "iLQR\n";
+            Eigen::MatrixXd result = runILQR(&sldblk, start, goal, false);
+            matrixToCSV(result,"block/block_ilqr_result.csv");
+            std::cout << "Saved result to block/block_ilqr_result.csv\n";
+        }
 
-    // else if(systemchoice == 2)
-    // {
-    //     std::cout << "What base system should be used?\n\t(1) Inverted Pendulum\n";
-    //     std::cin >> basesystemchoice;
-
-    //     std::cout << "Enter file with network information: ";
-    //     std::cin >> netfile;
-    //     net = NeuralNetwork(netfile);
-
-    //     if(basesystemchoice == 1)
-    //     {
-    //         netsys = NetworkSystem(net,&invpen);
-    //     }
-    // }
-
-
-    // std::cout << "What do you want to do?\n\t(1) Run iLQR\n\t(2) Generate I/O data for training\n";
-    // std::cin >> runchoice;
-
-    // if(runchoice == 1)
-    // {
-    //     // run ilqr here
-    // }
-    // else if(runchoice == 2)
-    // {
-    //     Eigen::MatrixXd x;
-    //     Eigen::MatrixXd y;
-
-    //     if(systemchoice == 1)
-    //     {
-    //         x = generateInputData(&invpen, 100000);
-    //         y = generateOutputData(&invpen, x);
-    //     }
-
-    //     std::cout << x.rows() << " " << x.cols() << "\n";
-    //     std::cout << y.rows() << " " << y.cols() << "\n";
-
-    //     std::cout << "Done generating training data\n";
-    //     std::cout << "Enter file prefix:";
-    //     std::cin >> filestart;
-    //     matrixToCSV(x,filestart+"_indata.csv");
-    //     std::cout << "Input data saved to " << filestart+"_indata.csv\n";
-    //     matrixToCSV(y,filestart+"_outdata.csv");
-    //     std::cout << "Output data saved to " << filestart+"_outdata.csv\n";
-    // }
-
-    // InvertedPendulum invpen = InvertedPendulum(1,1,1,0.001,0.01);
-    // Eigen::MatrixXd x = generateInputData(&invpen, 10000);
-    // Eigen::MatrixXd y = generateOutputData(&invpen, x);
-    
-    // NeuralNetwork net = NeuralNetwork(3, 2, 20, 4, 0);
-//    net.train(x, y, 200, 100, 0.01, 1);
-    
-    // boost::cout << "test\n";
-
-    // char pyname[] = "python3";
-    // FILE * pyfile;
-    // char pyfilename[] = "test.py";
-    // pyfile = fopen(pyfilename, "r");
-        
-    // Py_SetProgramName(pyname);
-    // Py_Initialize();
-    // PyRun_SimpleFile(pyfile,pyfilename);
-    // Py_Finalize();
-        
+    }
+            
     return 0;
 }

@@ -32,6 +32,8 @@ public:
     virtual Eigen::MatrixXd execute(Eigen::MatrixXd state, Eigen::MatrixXd control) = 0;
     
     Eigen::MatrixXd simulate(Eigen::MatrixXd start, Eigen::MatrixXd u, int numstep);
+
+    Eigen::MatrixXd findequilibria(Eigen::MatrixXd startpoints, int maxiter, double thresh, double step);
 };
 
 #endif /* System_hpp */

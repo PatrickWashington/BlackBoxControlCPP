@@ -60,3 +60,34 @@ Eigen::MatrixXd System::simulate(Eigen::MatrixXd start, Eigen::MatrixXd u, int n
     
     return x;
 }
+
+Eigen::MatrixXd System::findequilibria(Eigen::MatrixXd startpoints, int maxiter, double thresh, double step)
+{
+    startpoints = startpoints.block(0,0,numstate,startpoints.cols());
+    Eigen::MatrixXd result = Eigen::MatrixXd::Zero(numstate,startpoints.cols());
+    Eigen::MatrixXd u = Eigen::MatrixXd::Zero(numinput,1);
+    Eigen::MatrixXd x,f,A,dx;
+    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(numstate,numstate);
+
+    for(int ii = 0; ii < startpoints.cols(); ii++)
+    {
+        x = startpoints.block(0,ii,numstate,1);
+        for(int jj = 0; jj < maxiter; jj++)
+        {
+            f = dynamics(x,u);
+            A = linearize(x,u).block(0,0,numstate,numstate);
+            dx = (A-I).inverse() * (f-x);
+            dx *= step;
+            for(int kk = 0; kk < numstate/2; kk++)
+            {
+                dx.block(kk,0,1,1) = dx.block(kk,0,1,1).array().min((ranges(kk,1)-ranges(kk,0))/5.0).max((ranges(kk,0)-ranges(kk,1))/5.0).matrix();
+            }
+            x -= dx;
+            if(dx.norm() < thresh){ break; }
+            // std::cout << x.transpose() << "\n";
+        }
+        result.col(ii) = x;
+    }
+
+    return result;
+}

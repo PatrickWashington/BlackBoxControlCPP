@@ -13,7 +13,7 @@ import csv
 import scipy
 import scipy.linalg
 
-def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename='trainednetwork.pth'):
+def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename='trainednetwork'):
     inputsize = inputs.size()[1]
     print(inputsize)
     outputsize = outputs.size()[1]
@@ -26,6 +26,10 @@ def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename
     ytrain = outputs[:,:numtrain]
     xval = inputs[:,-numval:]
     yval = outputs[:,-numval:]
+    # xtrain = inputs
+    # ytrain = outputs
+    # xval = inputs
+    # yval = outputs
 
     hiddensize = 10*inputsize
 
@@ -33,6 +37,8 @@ def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename
         activation = torch.nn.Sigmoid()
     elif activate == 'tanh':
         activation = torch.nn.Tanh()
+    elif activate == 'relu':
+        activation = torch.nn.ReLU()
 
     # activation = torch.nn.Tanh()
     # activation = torch.nn.Sigmoid()
@@ -46,11 +52,16 @@ def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename
         activation,
         torch.nn.Linear(hiddensize, hiddensize),
         activation,
+        torch.nn.Linear(hiddensize, hiddensize),
+        activation,
+        torch.nn.Linear(hiddensize, hiddensize),
+        activation,
         torch.nn.Linear(hiddensize, outputsize)
     )
 
     # optimizer = torch.optim.RMSprop(net.parameters())
-    optimizer = torch.optim.AdamW(net.parameters())
+    # optimizer = torch.optim.AdamW(net.parameters())
+    optimizer = torch.optim.SGD(net.parameters(),lr=0.01,momentum=0.5)
     loss_func = torch.nn.MSELoss()
 
     torch_dataset = Data.TensorDataset(xtrain, ytrain)
@@ -66,9 +77,7 @@ def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename
         print("Epoch " + str(epoch+1) + " of " + str(EPOCH))
         for step, (batch_x, batch_y) in enumerate(loader): # for each training step
             prediction = net(batch_x)     # input x and predict based on x
-
             loss = loss_func(prediction, batch_y)     # must be (1. nn output, 2. target)
-
             optimizer.zero_grad()   # clear gradients for next train
             loss.backward()         # backpropagation, compute gradients
             optimizer.step()        # apply gradients
@@ -89,8 +98,11 @@ def train_nn(inputs,outputs,activate='sigmoid',BATCH_SIZE=1000,EPOCH=75,filename
     plt.ylabel('Validation Loss')
     plt.show()
 
-    nn2csv(net,filename,activate)
-    print('Saved network to',filename)
+    torch.save(net,filename+'.pth')
+    print('Saved network (pytorch) to',filename+'.pth')
+
+    nn2csv(net,filename+'.csv',activate)
+    print('Saved network (csv) to',filename+'.csv')
 
     return net
 

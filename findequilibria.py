@@ -1,16 +1,14 @@
 import numpy as np
-import os
-import csv
 import matplotlib.pyplot as plt
+import csv
+import os
 
-sysname = 'invpen net'
-netfile = 'invpen/invpen_statecontrol2next.csv'
-task = 'ilqr'
-cmd = (' ').join(['./run',sysname,netfile,task])
+cmd = './run invpen net invpen/invpen_network.csv eq'
+# cmd = './run invpen eq'
 os.system(cmd)
 
-
-filename = 'invpen/net_invpen_ilqr_result.csv'
+# filename = 'invpen/invpen_eq.csv'
+filename = 'invpen/invpen_net_eq.csv'
 with open(filename) as file:
     filereader = csv.reader(file,delimiter=',')
     ii = 0
@@ -25,8 +23,8 @@ with open(filename) as file:
         ii += 1
 
 plt.figure()
-plt.plot(data[0,:],label='th1')
-plt.plot(data[1,:],label='thd1')
-plt.plot(data[2,:],label='u')
-plt.legend()
+plt.plot((data[0,:]%(2*np.pi))*180/np.pi,data[1,:]*180/np.pi,'.')
+plt.xlabel('theta')
+plt.ylabel('thetadot')
+plt.title('Equilibrium Points')
 plt.show()
